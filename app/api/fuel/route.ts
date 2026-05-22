@@ -1,12 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 
 interface FuelPayload {
-  date: string;        // ngày nhập liệu
-  licensePlate: string; // BKS
-  odo: number;         // Odoo
-  liters: number;      // Lượng nhiên liệu ghi nhận
+  date: string;
+  licensePlate: string;
+  odo: number;
+  liters: number;
 }
 
+const getScriptUrl = () => process.env.GOOGLE_APPS_SCRIPT_URL;
+
+// ── GET: lấy lịch sử nhập nhiên liệu từ Google Sheets ────────
+export async function GET() {
+  const scriptUrl = getScriptUrl();
+  if (!scriptUrl) {
+    return NextResponse.json({ error: "GOOGLE_APPS_SCRIPT_URL not set." }, { status: 500 });
+  }
+  try {
+    const res = await fetch(`${scriptUrl}?action=fuel`, { redirect: "follow" });
+    const text = await res.text();
+    let data: unknown;
+    try { data = JSON.parse(text); } catch { data = text; }
+    return NextResponse.json(data, { status: 200 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+// ── POST: ghi nhận nhiên liệu mới ────────────────────────────
 export async function POST(req: NextRequest) {
   let body: Partial<FuelPayload>;
   try {
@@ -17,7 +38,6 @@ export async function POST(req: NextRequest) {
 
   const { date, licensePlate, odo, liters } = body;
 
-  // Validate required fields against actual sheet columns
   const missing = (["date", "licensePlate", "odo", "liters"] as const).filter(
     (k) => body[k] === undefined || body[k] === null || body[k] === ""
   );
@@ -28,12 +48,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "odo and liters must be greater than 0." }, { status: 400 });
   }
 
-  const scriptUrl = process.env.GOOGLE_APPS_SCRIPT_URL;
+  const scriptUrl = getScriptUrl();
   if (!scriptUrl) {
-    return NextResponse.json(
-      { error: "Server misconfiguration: GOOGLE_APPS_SCRIPT_URL not set." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "GOOGLE_APPS_SCRIPT_URL not set." }, { status: 500 });
   }
 
   try {
@@ -45,7 +62,7 @@ export async function POST(req: NextRequest) {
     });
 
     const rawText = await gasRes.text();
-    console.log("[/api/fuel] GAS status:", gasRes.status, "body:", rawText);
+    console.log("[/api/fuel POST] GAS status:", gasRes.status, "body:", rawText);
 
     if (!gasRes.ok) {
       return NextResponse.json({ error: "Apps Script error.", detail: rawText }, { status: 502 });
@@ -57,7 +74,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, data: gasData }, { status: 200 });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown network error.";
-    console.error("[/api/fuel] fetch error:", message);
+    console.error("[/api/fuel POST] fetch error:", message);
     return NextResponse.json({ error: "Failed to reach Apps Script.", detail: message }, { status: 500 });
   }
 }

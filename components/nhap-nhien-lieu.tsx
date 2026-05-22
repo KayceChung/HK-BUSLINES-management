@@ -1,15 +1,23 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Loader2, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
 
 type FormState = "idle" | "submitting" | "success" | "error";
 
 interface FuelLogData {
-  ngayNhap: string;   // ngày nhập liệu
-  bienSoXe: string;   // BKS
-  odo: string;        // Odoo
-  soLit: string;      // Lượng nhiên liệu ghi nhận
+  ngayNhap: string;
+  bienSoXe: string;
+  odo: string;
+  soLit: string;
+}
+
+interface FuelRow {
+  id: number;
+  date: string;
+  licensePlate: string;
+  odo: number;
+  liters: number;
 }
 
 const EMPTY: FuelLogData = {
@@ -43,6 +51,35 @@ export default function NhapNhienLieu() {
   const [errors, setErrors] = useState<Errors>({});
   const [status, setStatus] = useState<FormState>("idle");
 
+  const [history, setHistory] = useState<FuelRow[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState(false);
+
+  const fetchHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    setHistoryError(false);
+    try {
+      const res = await fetch("/api/fuel");
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      const rows: FuelRow[] = (data.rows ?? []).map((r: FuelRow) => ({
+        id: r.id,
+        date: r.date,
+        licensePlate: r.licensePlate,
+        odo: r.odo,
+        liters: r.liters,
+      }));
+      // Sắp xếp mới nhất lên đầu
+      setHistory(rows.reverse());
+    } catch {
+      setHistoryError(true);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchHistory(); }, [fetchHistory]);
+
   function set(field: keyof FuelLogData, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
     if (errors[field]) setErrors((e) => ({ ...e, [field]: undefined }));
@@ -51,10 +88,7 @@ export default function NhapNhienLieu() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const errs = validate(form);
-    if (Object.keys(errs).length) {
-      setErrors(errs);
-      return;
-    }
+    if (Object.keys(errs).length) { setErrors(errs); return; }
     setStatus("submitting");
     try {
       const res = await fetch("/api/fuel", {
@@ -71,6 +105,7 @@ export default function NhapNhienLieu() {
       setStatus("success");
       setForm(EMPTY);
       setErrors({});
+      fetchHistory();
     } catch {
       setStatus("error");
     }
@@ -79,8 +114,8 @@ export default function NhapNhienLieu() {
   const isSubmitting = status === "submitting";
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-start justify-center p-6 pt-10">
-      <div className="w-full max-w-xl">
+    <div className="min-h-screen bg-slate-50 p-6 pt-10 space-y-8">
+      <div className="w-full max-w-xl mx-auto">
         {/* Page title */}
         <div className="mb-6">
           <h1 className="text-xl font-bold text-slate-800">Nhập Nhiên Liệu</h1>
@@ -90,13 +125,13 @@ export default function NhapNhienLieu() {
           </p>
         </div>
 
+        {/* Form */}
         <form
           onSubmit={handleSubmit}
           noValidate
           className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-5">
-            {/* Ngày nhập */}
             <Field label="Ngày nhập liệu" required error={errors.ngayNhap}>
               <input
                 type="date"
@@ -108,7 +143,6 @@ export default function NhapNhienLieu() {
               />
             </Field>
 
-            {/* Biển số xe */}
             <Field label="Biển kiểm soát (BKS)" required error={errors.bienSoXe}>
               <select
                 value={form.bienSoXe}
@@ -117,13 +151,10 @@ export default function NhapNhienLieu() {
                 className={input(!!errors.bienSoXe)}
               >
                 <option value="">— Chọn xe —</option>
-                {VEHICLES.map((v) => (
-                  <option key={v}>{v}</option>
-                ))}
+                {VEHICLES.map((v) => <option key={v}>{v}</option>)}
               </select>
             </Field>
 
-            {/* Odo */}
             <Field label="Số công tơ mét — Odoo (km)" required error={errors.odo}>
               <input
                 type="number"
@@ -136,7 +167,6 @@ export default function NhapNhienLieu() {
               />
             </Field>
 
-            {/* Số lít */}
             <Field label="Lượng nhiên liệu ghi nhận (lít)" required error={errors.soLit}>
               <input
                 type="number"
@@ -151,22 +181,13 @@ export default function NhapNhienLieu() {
             </Field>
           </div>
 
-          {/* Alerts */}
           {status === "success" && (
-            <Alert
-              type="success"
-              icon={<CheckCircle2 size={16} />}
-              message="Đã ghi vào sheet thành công!"
-              onDismiss={() => setStatus("idle")}
-            />
+            <Alert type="success" icon={<CheckCircle2 size={16} />}
+              message="Đã ghi vào sheet thành công!" onDismiss={() => setStatus("idle")} />
           )}
           {status === "error" && (
-            <Alert
-              type="error"
-              icon={<XCircle size={16} />}
-              message="Có lỗi xảy ra. Vui lòng thử lại."
-              onDismiss={() => setStatus("idle")}
-            />
+            <Alert type="error" icon={<XCircle size={16} />}
+              message="Có lỗi xảy ra. Vui lòng thử lại." onDismiss={() => setStatus("idle")} />
           )}
 
           <div className="flex justify-end pt-1">
@@ -181,22 +202,104 @@ export default function NhapNhienLieu() {
           </div>
         </form>
       </div>
+
+      {/* ── Bảng lịch sử ── */}
+      <div className="w-full max-w-5xl mx-auto">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-base font-semibold text-slate-800">Lịch sử ghi nhận</h2>
+            {!historyLoading && !historyError && (
+              <p className="text-xs text-slate-400 mt-0.5">{history.length} bản ghi</p>
+            )}
+          </div>
+          <button
+            onClick={fetchHistory}
+            disabled={historyLoading}
+            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-green-600 disabled:opacity-50 transition-colors"
+          >
+            <RefreshCw size={13} className={historyLoading ? "animate-spin" : ""} />
+            Làm mới
+          </button>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          {historyLoading ? (
+            <div className="flex items-center justify-center gap-2 py-16 text-slate-400">
+              <Loader2 size={20} className="animate-spin text-green-600" />
+              <span className="text-sm">Đang tải dữ liệu…</span>
+            </div>
+          ) : historyError ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-16 text-slate-400">
+              <XCircle size={24} className="text-red-400" />
+              <span className="text-sm">Không thể tải dữ liệu.</span>
+              <button onClick={fetchHistory} className="text-xs text-green-600 hover:underline">Thử lại</button>
+            </div>
+          ) : history.length === 0 ? (
+            <div className="flex items-center justify-center py-16 text-sm text-slate-400">
+              Chưa có bản ghi nào.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <Th>ID</Th>
+                    <Th>Ngày nhập</Th>
+                    <Th>Biển số xe</Th>
+                    <Th align="right">Odoo (km)</Th>
+                    <Th align="right">Lượng NL (lít)</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((row, i) => (
+                    <tr
+                      key={row.id}
+                      className={`border-b border-slate-100 transition-colors hover:bg-green-50/40 ${
+                        i % 2 === 0 ? "bg-white" : "bg-slate-50/40"
+                      }`}
+                    >
+                      <td className="px-4 py-3 text-slate-400 font-mono text-xs">{row.id}</td>
+                      <td className="px-4 py-3 text-slate-700">{row.date}</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-xs font-medium">
+                          {row.licensePlate}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right text-slate-700 tabular-nums">
+                        {Number(row.odo).toLocaleString("vi-VN")}
+                      </td>
+                      <td className="px-4 py-3 text-right font-medium text-green-700 tabular-nums">
+                        {Number(row.liters).toLocaleString("vi-VN", { minimumFractionDigits: 1 })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
 /* ── Sub-components ── */
 
-function Field({
-  label, required, error, children,
-}: {
+function Th({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {
+  return (
+    <th className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 text-${align}`}>
+      {children}
+    </th>
+  );
+}
+
+function Field({ label, required, error, children }: {
   label: string; required?: boolean; error?: string; children: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-1">
       <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-        {label}
-        {required && <span className="text-red-500 ml-0.5">*</span>}
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       {children}
       {error && <p className="text-xs text-red-500 mt-0.5">{error}</p>}
@@ -204,9 +307,7 @@ function Field({
   );
 }
 
-function Alert({
-  type, icon, message, onDismiss,
-}: {
+function Alert({ type, icon, message, onDismiss }: {
   type: "success" | "error"; icon: React.ReactNode; message: string; onDismiss: () => void;
 }) {
   const cls = type === "success"
