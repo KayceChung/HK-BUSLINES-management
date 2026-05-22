@@ -65,9 +65,9 @@ export default function NhapNhienLieu() {
       setVehiclesError(false);
       try {
         const res = await fetch("/api/vehicles");
-        if (!res.ok) throw new Error();
         const data = await res.json();
-        setVehicles(data.vehicles ?? []);
+        if (!res.ok || !Array.isArray(data.vehicles)) throw new Error(data.error ?? "no vehicles");
+        setVehicles(data.vehicles);
       } catch {
         setVehiclesError(true);
       } finally {
