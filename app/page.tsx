@@ -28,6 +28,13 @@ export default function Home() {
             src="https://lookerstudio.google.com/embed/reporting/REPLACE_WITH_TIEU_THU_REPORT_ID/page/1"
           />
         )}
+
+        {activeTab === "email-tracking" && (
+          <LookerEmbed
+            title="Email - Tracking"
+            src="REPLACE_WITH_EMAIL_TRACKING_URL"
+          />
+        )}
       </main>
     </div>
   );

@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Fuel, BarChart2, TrendingDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Fuel, BarChart2, TrendingDown, Mail, ChevronLeft, ChevronRight } from "lucide-react";
 
-export type TabKey = "nhap-nhien-lieu" | "bao-cao-phan-cong" | "bao-cao-tieu-thu";
+export type TabKey = "nhap-nhien-lieu" | "bao-cao-phan-cong" | "bao-cao-tieu-thu" | "email-tracking";
 
 const NAV_ITEMS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   {
@@ -21,6 +21,11 @@ const NAV_ITEMS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
     key: "bao-cao-tieu-thu",
     label: "Báo Cáo Tiêu Thụ",
     icon: <TrendingDown size={20} />,
+  },
+  {
+    key: "email-tracking",
+    label: "Email - Tracking",
+    icon: <Mail size={20} />,
   },
 ];
 
