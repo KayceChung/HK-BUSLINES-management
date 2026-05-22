@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(New-Item -ItemType Directory -Force \"b:\\\\Website-management-HK_BUSLINES\\\\public\")",
+      "PowerShell(Copy-Item \"b:\\\\Website-management-HK_BUSLINES\\\\logo-hk-3-2048x887.png\" \"b:\\\\Website-management-HK_BUSLINES\\\\public\\\\logo-hk.png\" -Force)",
+      "PowerShell(New-Item -ItemType Directory -Force \"b:\\\\Website-management-HK_BUSLINES\\\\app\\\\api\\\\fuel\")"
+    ]
+  }
+}
