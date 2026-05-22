@@ -32,7 +32,7 @@ export default function Home() {
         {activeTab === "email-tracking" && (
           <LookerEmbed
             title="Email - Tracking"
-            src="REPLACE_WITH_EMAIL_TRACKING_URL"
+            src="https://datastudio.google.com/embed/reporting/e9ef43f8-ec79-4f9c-a674-1c8c9b7107a0/page/page_12345"
           />
         )}
       </main>
