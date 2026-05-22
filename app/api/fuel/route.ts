@@ -40,20 +40,24 @@ export async function POST(req: NextRequest) {
     const gasRes = await fetch(scriptUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // Only forward the 4 fields that map to sheet columns
       body: JSON.stringify({ action: "fuel", date, licensePlate, odo: Number(odo), liters: Number(liters) }),
       redirect: "follow",
     });
 
+    const rawText = await gasRes.text();
+    console.log("[/api/fuel] GAS status:", gasRes.status, "body:", rawText);
+
     if (!gasRes.ok) {
-      const text = await gasRes.text();
-      return NextResponse.json({ error: "Apps Script error.", detail: text }, { status: 502 });
+      return NextResponse.json({ error: "Apps Script error.", detail: rawText }, { status: 502 });
     }
 
-    const gasData = await gasRes.json();
+    let gasData: unknown;
+    try { gasData = JSON.parse(rawText); } catch { gasData = rawText; }
+
     return NextResponse.json({ success: true, data: gasData }, { status: 200 });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown network error.";
+    console.error("[/api/fuel] fetch error:", message);
     return NextResponse.json({ error: "Failed to reach Apps Script.", detail: message }, { status: 500 });
   }
 }
