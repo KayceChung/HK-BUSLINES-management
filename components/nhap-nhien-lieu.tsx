@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, RefreshCw, AlertCircle } from "lucide-react";
 
 type FormState = "idle" | "submitting" | "success" | "error";
 
@@ -18,6 +18,13 @@ interface FuelRow {
   licensePlate: string;
   odo: number;
   liters: number;
+}
+
+interface Vehicle {
+  id: string | number;
+  licensePlate: string;
+  type: string;
+  status: string;
 }
 
 const EMPTY: FuelLogData = {
@@ -38,22 +45,37 @@ function validate(data: FuelLogData): Errors {
   return e;
 }
 
-const VEHICLES = [
-  "51B-123.45",
-  "51B-678.90",
-  "51H-111.22",
-  "51H-333.44",
-  "51K-555.66",
-];
-
 export default function NhapNhienLieu() {
   const [form, setForm] = useState<FuelLogData>(EMPTY);
   const [errors, setErrors] = useState<Errors>({});
   const [status, setStatus] = useState<FormState>("idle");
 
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [vehiclesLoading, setVehiclesLoading] = useState(true);
+  const [vehiclesError, setVehiclesError] = useState(false);
+
   const [history, setHistory] = useState<FuelRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState(false);
+
+  // Fetch danh sách phương tiện từ sheet "Phương tiện"
+  useEffect(() => {
+    async function fetchVehicles() {
+      setVehiclesLoading(true);
+      setVehiclesError(false);
+      try {
+        const res = await fetch("/api/vehicles");
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        setVehicles(data.vehicles ?? []);
+      } catch {
+        setVehiclesError(true);
+      } finally {
+        setVehiclesLoading(false);
+      }
+    }
+    fetchVehicles();
+  }, []);
 
   const fetchHistory = useCallback(async () => {
     setHistoryLoading(true);
@@ -144,15 +166,28 @@ export default function NhapNhienLieu() {
             </Field>
 
             <Field label="Biển kiểm soát (BKS)" required error={errors.bienSoXe}>
-              <select
-                value={form.bienSoXe}
-                onChange={(e) => set("bienSoXe", e.target.value)}
-                disabled={isSubmitting}
-                className={input(!!errors.bienSoXe)}
-              >
-                <option value="">— Chọn xe —</option>
-                {VEHICLES.map((v) => <option key={v}>{v}</option>)}
-              </select>
+              {vehiclesError ? (
+                <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-500">
+                  <AlertCircle size={13} />
+                  Không tải được danh sách xe
+                </div>
+              ) : (
+                <select
+                  value={form.bienSoXe}
+                  onChange={(e) => set("bienSoXe", e.target.value)}
+                  disabled={isSubmitting || vehiclesLoading}
+                  className={input(!!errors.bienSoXe)}
+                >
+                  <option value="">
+                    {vehiclesLoading ? "Đang tải danh sách xe…" : "— Chọn xe —"}
+                  </option>
+                  {vehicles.map((v) => (
+                    <option key={v.id} value={v.licensePlate}>
+                      {v.licensePlate}{v.type ? ` — ${v.type}` : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
             </Field>
 
             <Field label="Số công tơ mét — Odoo (km)" required error={errors.odo}>
