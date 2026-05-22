@@ -25,7 +25,7 @@ export default function Home() {
         {activeTab === "bao-cao-tieu-thu" && (
           <LookerEmbed
             title="Báo Cáo Tiêu Thụ"
-            src="https://lookerstudio.google.com/embed/reporting/REPLACE_WITH_TIEU_THU_REPORT_ID/page/1"
+            src="https://datastudio.google.com/embed/reporting/c696d785-3ea0-4648-a15a-38cc7be93d02/page/p_m2a3rurw3d"
           />
         )}
 
