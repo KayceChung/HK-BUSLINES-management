@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, CheckCircle2, XCircle, RefreshCw, AlertCircle } from "lucide-react";
+import {
+  Loader2, CheckCircle2, XCircle, RefreshCw, AlertCircle,
+  Trash2, ChevronLeft, ChevronRight,
+} from "lucide-react";
 
 type FormState = "idle" | "submitting" | "success" | "error";
 
@@ -24,8 +27,9 @@ interface Vehicle {
   id: string | number;
   licensePlate: string;
   type: string;
-  status: string;
 }
+
+const ROWS_PER_PAGE = 50;
 
 const EMPTY: FuelLogData = {
   ngayNhap: new Date().toISOString().split("T")[0],
@@ -58,7 +62,10 @@ export default function NhapNhienLieu() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState(false);
 
-  // Fetch danh sách phương tiện từ sheet "Phương tiện"
+  const [currentPage, setCurrentPage] = useState(1);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  // ── Fetch vehicles ────────────────────────────────────────
   useEffect(() => {
     async function fetchVehicles() {
       setVehiclesLoading(true);
@@ -77,6 +84,7 @@ export default function NhapNhienLieu() {
     fetchVehicles();
   }, []);
 
+  // ── Fetch history ─────────────────────────────────────────
   const fetchHistory = useCallback(async () => {
     setHistoryLoading(true);
     setHistoryError(false);
@@ -85,14 +93,10 @@ export default function NhapNhienLieu() {
       if (!res.ok) throw new Error();
       const data = await res.json();
       const rows: FuelRow[] = (data.rows ?? []).map((r: FuelRow) => ({
-        id: r.id,
-        date: r.date,
-        licensePlate: r.licensePlate,
-        odo: r.odo,
-        liters: r.liters,
+        id: r.id, date: r.date, licensePlate: r.licensePlate, odo: r.odo, liters: r.liters,
       }));
-      // Sắp xếp mới nhất lên đầu
       setHistory(rows.reverse());
+      setCurrentPage(1);
     } catch {
       setHistoryError(true);
     } finally {
@@ -102,6 +106,7 @@ export default function NhapNhienLieu() {
 
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
+  // ── Form handlers ─────────────────────────────────────────
   function set(field: keyof FuelLogData, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
     if (errors[field]) setErrors((e) => ({ ...e, [field]: undefined }));
@@ -133,12 +138,31 @@ export default function NhapNhienLieu() {
     }
   }
 
+  // ── Delete handler ────────────────────────────────────────
+  async function handleDelete(row: FuelRow) {
+    if (!confirm(`Xóa bản ghi #${row.id} — ${row.licensePlate} (${row.date})?`)) return;
+    setDeletingId(row.id);
+    try {
+      const res = await fetch(`/api/fuel?id=${row.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      setHistory((prev) => prev.filter((r) => r.id !== row.id));
+    } catch {
+      alert("Xóa thất bại. Vui lòng thử lại.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  // ── Pagination ────────────────────────────────────────────
+  const totalPages = Math.max(1, Math.ceil(history.length / ROWS_PER_PAGE));
+  const paginated = history.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE);
+
   const isSubmitting = status === "submitting";
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 pt-10 space-y-8">
+      {/* ── Form ── */}
       <div className="w-full max-w-xl mx-auto">
-        {/* Page title */}
         <div className="mb-6">
           <h1 className="text-xl font-bold text-slate-800">Nhập Nhiên Liệu</h1>
           <p className="text-sm text-slate-400 mt-0.5">
@@ -147,40 +171,25 @@ export default function NhapNhienLieu() {
           </p>
         </div>
 
-        {/* Form */}
-        <form
-          onSubmit={handleSubmit}
-          noValidate
-          className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6"
-        >
+        <form onSubmit={handleSubmit} noValidate
+          className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-5">
             <Field label="Ngày nhập liệu" required error={errors.ngayNhap}>
-              <input
-                type="date"
-                value={form.ngayNhap}
+              <input type="date" value={form.ngayNhap}
                 max={new Date().toISOString().split("T")[0]}
                 onChange={(e) => set("ngayNhap", e.target.value)}
-                disabled={isSubmitting}
-                className={input(!!errors.ngayNhap)}
-              />
+                disabled={isSubmitting} className={input(!!errors.ngayNhap)} />
             </Field>
 
             <Field label="Biển kiểm soát (BKS)" required error={errors.bienSoXe}>
               {vehiclesError ? (
                 <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-500">
-                  <AlertCircle size={13} />
-                  Không tải được danh sách xe
+                  <AlertCircle size={13} /> Không tải được danh sách xe
                 </div>
               ) : (
-                <select
-                  value={form.bienSoXe}
-                  onChange={(e) => set("bienSoXe", e.target.value)}
-                  disabled={isSubmitting || vehiclesLoading}
-                  className={input(!!errors.bienSoXe)}
-                >
-                  <option value="">
-                    {vehiclesLoading ? "Đang tải danh sách xe…" : "— Chọn xe —"}
-                  </option>
+                <select value={form.bienSoXe} onChange={(e) => set("bienSoXe", e.target.value)}
+                  disabled={isSubmitting || vehiclesLoading} className={input(!!errors.bienSoXe)}>
+                  <option value="">{vehiclesLoading ? "Đang tải danh sách xe…" : "— Chọn xe —"}</option>
                   {vehicles.map((v) => (
                     <option key={v.id} value={v.licensePlate}>
                       {v.licensePlate}{v.type ? ` — ${v.type}` : ""}
@@ -191,28 +200,15 @@ export default function NhapNhienLieu() {
             </Field>
 
             <Field label="Số công tơ mét — Odoo (km)" required error={errors.odo}>
-              <input
-                type="number"
-                min={0}
-                placeholder="VD: 125000"
-                value={form.odo}
+              <input type="number" min={0} placeholder="VD: 125000" value={form.odo}
                 onChange={(e) => set("odo", e.target.value)}
-                disabled={isSubmitting}
-                className={input(!!errors.odo)}
-              />
+                disabled={isSubmitting} className={input(!!errors.odo)} />
             </Field>
 
             <Field label="Lượng nhiên liệu ghi nhận (lít)" required error={errors.soLit}>
-              <input
-                type="number"
-                min={0}
-                step="0.1"
-                placeholder="VD: 45.5"
-                value={form.soLit}
+              <input type="number" min={0} step="0.1" placeholder="VD: 45.5" value={form.soLit}
                 onChange={(e) => set("soLit", e.target.value)}
-                disabled={isSubmitting}
-                className={input(!!errors.soLit)}
-              />
+                disabled={isSubmitting} className={input(!!errors.soLit)} />
             </Field>
           </div>
 
@@ -226,11 +222,8 @@ export default function NhapNhienLieu() {
           )}
 
           <div className="flex justify-end pt-1">
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-green-600 hover:bg-green-700 active:bg-green-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors shadow-sm"
-            >
+            <button type="submit" disabled={isSubmitting}
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors shadow-sm">
               {isSubmitting && <Loader2 size={15} className="animate-spin" />}
               {isSubmitting ? "Đang lưu…" : "Lưu phiếu nhập"}
             </button>
@@ -247,11 +240,8 @@ export default function NhapNhienLieu() {
               <p className="text-xs text-slate-400 mt-0.5">{history.length} bản ghi</p>
             )}
           </div>
-          <button
-            onClick={fetchHistory}
-            disabled={historyLoading}
-            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-green-600 disabled:opacity-50 transition-colors"
-          >
+          <button onClick={fetchHistory} disabled={historyLoading}
+            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-green-600 disabled:opacity-50 transition-colors">
             <RefreshCw size={13} className={historyLoading ? "animate-spin" : ""} />
             Làm mới
           </button>
@@ -274,43 +264,95 @@ export default function NhapNhienLieu() {
               Chưa có bản ghi nào.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200">
-                    <Th>ID</Th>
-                    <Th>Ngày nhập</Th>
-                    <Th>Biển số xe</Th>
-                    <Th align="right">Odoo (km)</Th>
-                    <Th align="right">Lượng NL (lít)</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history.map((row, i) => (
-                    <tr
-                      key={row.id}
-                      className={`border-b border-slate-100 transition-colors hover:bg-green-50/40 ${
-                        i % 2 === 0 ? "bg-white" : "bg-slate-50/40"
-                      }`}
-                    >
-                      <td className="px-4 py-3 text-slate-400 font-mono text-xs">{row.id}</td>
-                      <td className="px-4 py-3 text-slate-700">{row.date}</td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-xs font-medium">
-                          {row.licensePlate}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right text-slate-700 tabular-nums">
-                        {Number(row.odo).toLocaleString("vi-VN")}
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium text-green-700 tabular-nums">
-                        {Number(row.liters).toLocaleString("vi-VN", { minimumFractionDigits: 1 })}
-                      </td>
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <Th>ID</Th>
+                      <Th>Ngày nhập</Th>
+                      <Th>Biển số xe</Th>
+                      <Th align="right">Odoo (km)</Th>
+                      <Th align="right">Lượng NL (lít)</Th>
+                      <Th align="center">Xóa</Th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {paginated.map((row, i) => (
+                      <tr key={row.id}
+                        className={`border-b border-slate-100 transition-colors hover:bg-green-50/40 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
+                        <td className="px-4 py-3 text-slate-400 font-mono text-xs">{row.id}</td>
+                        <td className="px-4 py-3 text-slate-700">{row.date}</td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-xs font-medium">
+                            {row.licensePlate}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right text-slate-700 tabular-nums">
+                          {Number(row.odo).toLocaleString("vi-VN")}
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium text-green-700 tabular-nums">
+                          {Number(row.liters).toLocaleString("vi-VN", { minimumFractionDigits: 1 })}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <button
+                            onClick={() => handleDelete(row)}
+                            disabled={deletingId === row.id}
+                            title="Xóa bản ghi"
+                            className="inline-flex items-center justify-center w-7 h-7 rounded-md text-slate-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-40 transition-colors"
+                          >
+                            {deletingId === row.id
+                              ? <Loader2 size={14} className="animate-spin" />
+                              : <Trash2 size={14} />}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100">
+                  <p className="text-xs text-slate-400">
+                    Trang <span className="font-semibold text-slate-600">{currentPage}</span> / {totalPages}
+                    <span className="ml-2">({history.length} bản ghi)</span>
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <PageBtn onClick={() => setCurrentPage(1)} disabled={currentPage === 1} label="«" />
+                    <PageBtn onClick={() => setCurrentPage((p) => p - 1)} disabled={currentPage === 1} label="‹" />
+                    {/* Số trang xung quanh */}
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                      .reduce<(number | "...")[]>((acc, p, idx, arr) => {
+                        if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("...");
+                        acc.push(p);
+                        return acc;
+                      }, [])
+                      .map((p, i) =>
+                        p === "..." ? (
+                          <span key={`ellipsis-${i}`} className="px-2 text-slate-400 text-xs">…</span>
+                        ) : (
+                          <button
+                            key={p}
+                            onClick={() => setCurrentPage(p as number)}
+                            className={`w-7 h-7 rounded text-xs font-medium transition-colors ${
+                              currentPage === p
+                                ? "bg-green-600 text-white"
+                                : "text-slate-500 hover:bg-slate-100"
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        )
+                      )}
+                    <PageBtn onClick={() => setCurrentPage((p) => p + 1)} disabled={currentPage === totalPages} label="›" />
+                    <PageBtn onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} label="»" />
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -320,7 +362,16 @@ export default function NhapNhienLieu() {
 
 /* ── Sub-components ── */
 
-function Th({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {
+function PageBtn({ onClick, disabled, label }: { onClick: () => void; disabled: boolean; label: string }) {
+  return (
+    <button onClick={onClick} disabled={disabled}
+      className="w-7 h-7 rounded text-xs text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+      {label}
+    </button>
+  );
+}
+
+function Th({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" | "center" }) {
   return (
     <th className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 text-${align}`}>
       {children}
